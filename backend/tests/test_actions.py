@@ -55,7 +55,8 @@ def test_invoke_invalid_input(client: TestClient) -> None:
 
 
 def test_invoke_unknown_action(client: TestClient) -> None:
-    response = client.post("/neosuite/actions/v1/neoexample.item.delete:invoke", json={"input": {}})
+    action = "neoexample.item.delete"
+    response = client.post(f"/neosuite/actions/v1/{action}:invoke", json={"input": {}})
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
 
