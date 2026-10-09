@@ -1,10 +1,30 @@
 [component]
-name = "neosuite-template"
-kind = "library"
-title = "NeoSuite Service Template"
+name = "neoexample"
+kind = "product"
+title = "NeoExample"
+profiles = ["full"]
+
+[build]
+images = ["backend"]
+packages = ["frontend"]
 
 [contracts]
-provides_types = []
+provides_types = ["neoexample.Item"]
 consumes_types = []
-emits = []
+emits = ["neoexample.item.created"]
+actions = ["neoexample.item.transition"]
 depends_on = []
+
+[runtime.backend]
+ports = [{ name = "http", container = 8000, expose = "internal" }]
+ingress = { host = "example", path = "/" }
+env_required = []
+secrets = []
+volumes = []
+health = { live = "/healthz", ready = "/readyz", metrics = "/metrics" }
+resources = { min_memory = "128Mi", min_cpu = "0.1" }
+
+[lifecycle]
+migrate = { command = ["neoexample", "migrate", "apply"], reversible = false }
+backup = { command = ["neoexample", "backup", "/backup"], restore = ["neoexample", "restore", "/backup"], consistency = "online" }
+upgrade = { supports_from = "N-2-minors", downgrade = false }
