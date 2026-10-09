@@ -1,17 +1,57 @@
-[tool.black]
-line-length = 88
-target-version = ['py312']
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
-[tool.isort]
-profile = "black"
+[project]
+name = "neoexample"
+version = "0.1.0"
+description = "NeoExample API service (FastAPI) over the neoexample_core Rust engine."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "neoexample-core>=0.1,<0.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+]
 
-[tool.mypy]
-python_version = 3.12
-ignore_missing_imports = true
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.28",
+    "ruff>=0.11",
+    "mypy>=1.15",
+    "pyyaml>=6.0",
+    "types-PyYAML>=6.0",
+]
+
+[project.scripts]
+neoexample = "neoexample.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neoexample"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    # Starlette's TestClient recommends httpx2; httpx is still fully supported.
+    "ignore:Using `httpx` with `starlette.testclient`",
+]
 
 [tool.ruff]
-line-length = 88
-exclude = [".venv", "venv", "build", "dist"]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
 
 [tool.ruff.lint]
-extend-select = ["E", "F", "W", "C90"]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "N"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["neoexample", "tests"]
+plugins = ["pydantic.mypy"]
