@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+.env
+.site.conf
+.vps.env
+migrations/
+*.sqlite3
+.DS_Store

@@ -1,0 +1,10 @@
+[component]
+name = "neosuite-template"
+kind = "library"
+title = "NeoSuite Service Template"
+
+[contracts]
+provides_types = []
+consumes_types = []
+emits = []
+depends_on = []
