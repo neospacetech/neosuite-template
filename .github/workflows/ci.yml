@@ -1,77 +1,106 @@
-name: ci
+name: CI
 
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint:
+  rust:
+    name: Rust engine
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
-
+        working-directory: engine
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  backend:
+    name: Python backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install linters
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Build the core wheel
         run: |
-          python -m pip install --upgrade pip
-          pip install black isort ruff mypy
-
-      - name: Run linters
+          python -m pip install "maturin>=1.9,<2"
+          maturin build --release --locked -m engine/py/Cargo.toml -o engine/dist
+      - name: Install the wheel and the backend
         run: |
-          black --check .
-          isort --check-only .
+          python -m pip install engine/dist/*.whl
+          python -m pip install -e "backend[dev]"
+      - name: Lint
+        working-directory: backend
+        run: |
           ruff check .
-          mypy app tests || true
-
-  test:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+          ruff format --check .
+      - name: Type-check
         working-directory: backend
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: project_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres -d project_test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    env:
-      FLASK_ENV: testing
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/project_test
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run tests
+        run: mypy
+      - name: Test
+        working-directory: backend
         run: pytest
+
+  image:
+    name: Backend image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -f deploy/Dockerfile.backend -t neoexample-backend:ci .
+      - name: Smoke test
+        run: |
+          docker run -d --name backend -p 8000:8000 neoexample-backend:ci
+          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/readyz && exit 0; sleep 1; done
+          docker logs backend
+          exit 1
+
+  # >>> frontend
+  frontend:
+    name: Frontend module
+    runs-on: ubuntu-latest
+    steps:
+      # The frontend depends on neosuite-commons through `file:../../neosuite-commons/...`,
+      # so both repositories are checked out side by side.
+      - uses: actions/checkout@v4
+        with:
+          path: neoexample
+      - uses: actions/checkout@v4
+        with:
+          repository: neospacetech/neosuite-commons
+          ref: ${{ vars.NEOSUITE_COMMONS_REF || 'main' }}
+          path: neosuite-commons
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: neoexample/frontend/package-lock.json
+      - run: npm ci
+        working-directory: neoexample/frontend
+      - run: npm run typecheck
+        working-directory: neoexample/frontend
+  # <<< frontend
